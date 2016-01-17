@@ -1,25 +1,14 @@
 require 'nmatrix'
 require 'rubystats'
+require 'pry'
 
-class NeuralNetwork2
+class NeuralNetworkMatMini
 
   def initialize(sizes)
     @sizes = sizes
     @num_layers = sizes.length
-    initialize_weights(sizes)
-  end
-
-  def initialize_large_weights(sizes)
     @biases = sizes[1..-1].map { |s| N[ rand_array(s) ].transpose }
     @weights = sizes.each_cons(2).map { |n, m| N[ *rand_2d_array(m, n) ] }
-  end
-
-  def initialize_weights(sizes)
-    @biases = sizes[1..-1].map { |s| N[ rand_array(s) ].transpose }
-    @weights = sizes.each_cons(2).map do |n, m|
-      std_dev = 1.0 / (n) ** 0.5
-      N[ *rand_2d_array(m, n, std_dev) ]
-    end
   end
 
   def feedforward(a)
@@ -35,7 +24,8 @@ class NeuralNetwork2
       shuffled_t_s = training_set.shuffle
 
       shuffled_t_s.each_slice(mini_batch_size) do |mini_batch|
-        update_mini_batch(mini_batch, eta)
+        mini_batch_x, mini_batch_y = mini_batch_matrix(mini_batch)
+        update_mini_batch(mini_batch_x, mini_batch_y, eta)
       end
 
       if test_set
@@ -52,16 +42,11 @@ class NeuralNetwork2
     end
   end
 
-  def update_mini_batch(mini_batch, eta)
-    nabla_b = @biases.map { |b| NMatrix.zeros b.shape }
-    nabla_w = @weights.map { |w| NMatrix.zeros w.shape }
-
-    mini_batch.each do |x, y|
-      nabla_b_x, nabla_w_x = backpropagate(x, y)
-
-      nabla_b = nabla_b.map.with_index { |nb, l| nb + nabla_b_x[l] }
-      nabla_w = nabla_w.map.with_index { |nw, l| nw + nabla_w_x[l] }
-    end
+  def update_mini_batch(mini_batch_x, mini_batch_y, eta)
+    nabla_b, nabla_w = backpropagate(mini_batch_x, mini_batch_y)
+    binding.pry
+    nabla_b = nabla_b.map { |nb| N[ nb.each_columns.reduce(:+) ].transpose }
+    nabla_w = nabla_w.map { |nw| N[ nw.each_row.reduce(:+) ].transpose }
 
     @biases = @biases.map.with_index { |b, l| b - nabla_b[l] * (eta / mini_batch.length) }
     @weights = @weights.map.with_index { |w, l| w - nabla_w[l] * (eta / mini_batch.length) }
@@ -76,7 +61,8 @@ class NeuralNetwork2
     weighted_inputs = [nil]
 
     (1..(@num_layers - 1)).each do |l|
-      weighted_input_l = weighted_input weights(l), output_activation, biases(l)
+      weighted_input_l =
+        weights(l).dot(output_activation) + biases(l).repeat(x.cols, 1)
       weighted_inputs << weighted_input_l
 
       output_activation = sigmoid weighted_input_l
@@ -84,7 +70,7 @@ class NeuralNetwork2
     end
 
     # output error
-    delta = output_error(output_activation, y, weighted_inputs.last)
+    delta = (output_activation - y) * sigmoid_prime(weighted_inputs.last)
 
     # backpropagate the error
     nabla_b = Array.new @biases.length
@@ -97,6 +83,7 @@ class NeuralNetwork2
       delta = backprop_error(weights(l + 1), delta, weighted_inputs[l])
 
       nabla_b[l - 1] = delta
+      binding.pry
       nabla_w[l - 1] = delta.dot activations[l - 1].transpose
     end
 
@@ -133,16 +120,23 @@ class NeuralNetwork2
     @biases[l - 1]
   end
 
-  def rand_2d_array(size_x, size_y, std_dev = 1)
-    Array.new(size_x) { Array.new(size_y) { norm_dist_random(std_dev) } }
+  def mini_batch_matrix(mini_batch)
+    mini_batch_x = N[ *mini_batch.map { |x, _| x.transpose.to_a } ].transpose
+    mini_batch_y = N[ *mini_batch.map { |_, y| y.transpose.to_a } ].transpose
+
+    [mini_batch_x, mini_batch_y]
+  end
+
+  def rand_2d_array(size_x, size_y)
+    Array.new(size_x) { Array.new(size_y) {norm_dist_random} }
   end
 
   def rand_array(size)
-    Array.new(size) { norm_dist_random(1) }
+    Array.new(size) { norm_dist_random }
   end
 
-  def norm_dist_random(std_dev)
-    gen = Rubystats::NormalDistribution.new(0, std_dev)
+  def norm_dist_random
+    gen = Rubystats::NormalDistribution.new(0, 1)
     gen.rng
   end
 

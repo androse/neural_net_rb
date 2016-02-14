@@ -51,7 +51,7 @@ module Utils
     training_set = data.first(50_000)
     test_set = data.last(10_000)
 
-    nn.stochastic_gradient_descent(training_set, 10, 10, 3.0, test_set)
+    nn.stochastic_gradient_descent(training_set, 10, 10, 3.0, test_set: test_set)
 
     ex = training_set.sample
     expected = ex[1].to_a.each_with_index.max[1]
@@ -60,15 +60,13 @@ module Utils
     [expected, actual]
   end
 
-  # unable to do matrix mini batch updating
-  # http://neuralnetworksanddeeplearning.com/chap2.html#problem_269962
   def self.test2
     nn = NeuralNetwork2.new([784, 30, 10])
     data = prepped_data
     training_set = data.first(50_000)
     test_set = data.last(10_000)
 
-    nn.stochastic_gradient_descent(training_set, 1, 10, 3.0, test_set)
+    nn.stochastic_gradient_descent(training_set, 10, 0.5, lmbda: 5.0, test_set: test_set)
 
     ex = training_set.sample
     expected = ex[1].to_a.each_with_index.max[1]
